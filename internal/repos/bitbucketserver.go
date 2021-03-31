@@ -475,3 +475,13 @@ func (s *BitbucketServerSource) ValidateAuthenticator(ctx context.Context) error
 	_, err := s.client.AuthenticatedUsername(ctx)
 	return err
 }
+
+// CreateComment posts a comment on the Changeset.
+func (s *BitbucketServerSource) CreateComment(ctx context.Context, c *Changeset, text string) error {
+	pr, ok := c.Changeset.Metadata.(*bitbucketserver.PullRequest)
+	if !ok {
+		return errors.New("Changeset is not a Bitbucket Server pull request")
+	}
+
+	return s.client.CreatePullRequestComment(ctx, pr, text)
+}
