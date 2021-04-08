@@ -6,10 +6,9 @@ import (
 
 	"github.com/inconshreveable/log15"
 
-	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/scheduler/window"
+	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/scheduler/config"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/store"
 	"github.com/sourcegraph/sourcegraph/internal/batches"
-	"github.com/sourcegraph/sourcegraph/internal/conf"
 	"github.com/sourcegraph/sourcegraph/internal/goroutine"
 )
 
@@ -17,8 +16,6 @@ type Scheduler struct {
 	ctx   context.Context
 	done  chan struct{}
 	store *store.Store
-
-	cfg chan *window.Configuration
 }
 
 var _ goroutine.BackgroundRoutine = &Scheduler{}
@@ -29,25 +26,7 @@ func NewScheduler(ctx context.Context, bstore *store.Store) *Scheduler {
 		ctx:   ctx,
 		done:  make(chan struct{}),
 		store: bstore,
-		cfg:   make(chan *window.Configuration),
 	}
-
-	// Set up a configuration watcher so that we update the window
-	// configuration when the configuration updates.
-	goroutine.Go(func() {
-		// FIXME: this gets leaked if the scheduler is dropped, since we can't
-		// hook directly into the configuration client's watcher array.
-		conf.Watch(func() {
-			// TODO: check if the configuration actually changed.
-			cfg, err := window.NewConfiguration(conf.Get().BatchChangesRolloutWindows)
-			if err != nil {
-				log15.Warn("invalid batch change rollout window configuration", "err", err)
-				cfg, _ = window.NewConfiguration(nil)
-			}
-
-			s.cfg <- cfg
-		})
-	})
 
 	return s
 }
@@ -60,11 +39,11 @@ func (s *Scheduler) Start() {
 		// minute.
 		backoff := newBackoff(5*time.Second, 2, 1*time.Minute)
 
-		// Retrieve the initial configuration.
-		cfg := <-s.cfg
+		// Set up our configuration listener.
+		cfg := config.Subscribe()
 
 		for {
-			schedule := cfg.Schedule()
+			schedule := config.Active().Schedule()
 			taker := newTaker(schedule)
 			timer := time.NewTimer(time.Until(schedule.ValidUntil()))
 
@@ -91,7 +70,7 @@ func (s *Scheduler) Start() {
 				case <-timer.C:
 					log15.Info("current batch change schedule is outdated; looping")
 					continue
-				case cfg = <-s.cfg:
+				case <-cfg:
 					log15.Info("batch change configuration updated; looping")
 					continue
 				case <-s.done:
