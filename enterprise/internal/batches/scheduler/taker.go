@@ -24,10 +24,10 @@ type taker struct {
 
 	mu       sync.Mutex
 	done     bool
-	schedule window.Schedule
+	schedule *window.Schedule
 }
 
-func newTaker(schedule window.Schedule) *taker {
+func newTaker(schedule *window.Schedule) *taker {
 	t := &taker{
 		C:        make(chan chan time.Duration),
 		done:     false,
