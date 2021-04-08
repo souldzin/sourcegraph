@@ -69,12 +69,15 @@ func (s *Scheduler) Start() {
 					}
 				case <-timer.C:
 					log15.Info("current batch change schedule is outdated; looping")
+					taker.stop()
 					continue
 				case <-cfg:
 					log15.Info("batch change configuration updated; looping")
+					taker.stop()
 					continue
 				case <-s.done:
 					log15.Info("stopping the batch change scheduler")
+					taker.stop()
 					return
 				}
 			}
