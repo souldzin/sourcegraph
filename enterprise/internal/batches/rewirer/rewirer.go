@@ -6,6 +6,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/scheduler/window"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/store"
 	"github.com/sourcegraph/sourcegraph/internal/batches"
+	"github.com/sourcegraph/sourcegraph/internal/conf"
 	"github.com/sourcegraph/sourcegraph/internal/database"
 	"github.com/sourcegraph/sourcegraph/internal/types"
 )
@@ -92,7 +93,7 @@ func (r *ChangesetRewirer) createChangesetForSpec(repo *types.Repo, spec *batche
 	// FIXME: this is _definitely_ not the right place to parse the
 	// configuration.
 	reconcilerState := batches.ReconcilerStateQueued
-	if window.NewConfiguration().HasRolloutWindows() {
+	if cfg, _:= window.NewConfiguration(conf.Get().BatchChangesRolloutWindows); cfg != nil && cfg.HasRolloutWindows() {
 		reconcilerState = batches.ReconcilerStateScheduled
 	}
 
