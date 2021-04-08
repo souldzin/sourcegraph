@@ -31,6 +31,12 @@ func Subscribe() chan *window.Configuration {
 	return ensureConfig().Subscribe()
 }
 
+// ensureConfig grabs the current configuration, lazily constructing it if
+// necessary. It momentarily locks the singleton mutex, but releases it when it
+// returns the config. This protects us against race conditions when overwriting
+// the config, since Go doesn't guarantee even pointer writes are atomic, but
+// doesn't provide any safety to the user. As a result, this shouldn't be used
+// for anything that involves writing to the config.
 func ensureConfig() *configuration {
 	mu.Lock()
 	defer mu.Unlock()
@@ -41,6 +47,8 @@ func ensureConfig() *configuration {
 	return config
 }
 
+// configuration wraps window.Configuration in a thread-safe manner, while
+// allowing consuming code to subscribe to configuration updates.
 type configuration struct {
 	mu          sync.RWMutex
 	active      *window.Configuration
@@ -53,6 +61,12 @@ func newConfiguration() *configuration {
 
 	first := true
 	conf.Watch(func() {
+		// Technically, if RWMutex instances could be up- and downgraded through
+		// their life, we only really need a write lock briefly below when we
+		// write to c.active and c.raw. However, Go's sync.RWMutex doesn't
+		// provide that, so we'll just write-lock the whole time. Given there
+		// shouldn't be a lot of contention around this type, that should be
+		// fine.
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
@@ -104,6 +118,8 @@ func (c *configuration) Subscribe() chan *window.Configuration {
 }
 
 func (c *configuration) notify() {
+	// This should only be called from functions that have already locked the
+	// configuration mutex for at least read access.
 	for _, subscriber := range c.subscribers {
 		subscriber <- c.active
 	}
