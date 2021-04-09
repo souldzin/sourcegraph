@@ -688,7 +688,7 @@ function callViewProvidersSequentially<W extends ContributableViewContainer>(
                 ),
                 scan<ViewProviderResult & { index: number }, ViewProviderResult[]>(
                     (accumulator, current) => {
-                        const { index, ...payload } = current;
+                        const { index, ...payload } = current
                         accumulator[index] = payload
 
                         return accumulator
