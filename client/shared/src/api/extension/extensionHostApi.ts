@@ -1,11 +1,13 @@
 import { LOADING, MaybeLoadingResult } from '@sourcegraph/codeintellify'
 import {
-    catchError, concatMap,
+    catchError,
+    concatMap,
     debounceTime,
     defaultIfEmpty,
     distinctUntilChanged,
     map,
-    mergeMap, scan,
+    mergeMap,
+    scan,
     switchMap,
 } from 'rxjs/operators'
 import { allOf, isDefined, isExactly, isNot, property } from '../../util/types'
@@ -417,7 +419,8 @@ export function createExtensionHostAPI(state: ExtensionHostState): FlatExtension
                 )
             ),
 
-        getInsightsViews: context => proxySubscribable(callViewProvidersSequentially(context, state.insightsPageViewProviders)),
+        getInsightsViews: context =>
+            proxySubscribable(callViewProvidersSequentially(context, state.insightsPageViewProviders)),
         getHomepageViews: context => proxySubscribable(callViewProviders(context, state.homepageViewProviders)),
         getGlobalPageViews: context => proxySubscribable(callViewProviders(context, state.globalPageViewProviders)),
         getDirectoryViews: context =>
@@ -684,11 +687,14 @@ function callViewProvidersSequentially<W extends ContributableViewContainer>(
                         map(view => ({ id, view }))
                     )
                 ),
-                scan<ViewProviderResult, ViewProviderResult[]>((accumulator, current, index) => {
-                    accumulator[index] = current;
+                scan<ViewProviderResult, ViewProviderResult[]>(
+                    (accumulator, current, index) => {
+                        accumulator[index] = current
 
-                    return accumulator;
-                }, providers.map(provider => ({ id: provider.id, view: undefined })))
+                        return accumulator
+                    },
+                    providers.map(provider => ({ id: provider.id, view: undefined }))
+                )
             )
         ),
         map(views => views.filter(allOf(isDefined, property('view', isNot(isExactly(null))))))
