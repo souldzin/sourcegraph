@@ -24,13 +24,11 @@ type Scheduler struct {
 var _ goroutine.BackgroundRoutine = &Scheduler{}
 
 func NewScheduler(ctx context.Context, bstore *store.Store) *Scheduler {
-	s := &Scheduler{
+	return &Scheduler{
 		ctx:   ctx,
 		done:  make(chan struct{}),
 		store: bstore,
 	}
-
-	return s
 }
 
 func (s *Scheduler) Start() {
