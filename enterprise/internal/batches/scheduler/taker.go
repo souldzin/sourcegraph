@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"sync"
 	"time"
 
 	"github.com/inconshreveable/log15"
@@ -16,46 +15,59 @@ import (
 // ready: this is important to avoid a busy-wait loop.
 //
 // Note that taker does not check the validity period of the schedule it is
-// given.
+// given; the caller should do this and stop the taker if the schedule expires
+// or the configuration updates.
+//
+// It is important that the caller calls stop() when the taker is no longer in
+// use, otherwise a goroutine, channel, and probably a rate limiter will be
+// leaked.
 type taker struct {
 	// C is the channel that will receive messages when a changeset can be
-	// scheduled.
+	// scheduled. The receiver must respond on the channel embedded in the
+	// message to indicate if the next Take() should be delayed: if so, the
+	// duration must be that value, otherwise a zero duration must be sent.
+	//
+	// If nil is sent over this channel, an error occurred, and this taker must
+	// be stopped and discarded immediately.
 	C chan chan time.Duration
 
-	mu       sync.Mutex
-	done     bool
+	done     chan struct{}
 	schedule *window.Schedule
 }
 
 func newTaker(schedule *window.Schedule) *taker {
 	t := &taker{
 		C:        make(chan chan time.Duration),
-		done:     false,
+		done:     make(chan struct{}),
 		schedule: schedule,
 	}
 
 	goroutine.Go(func() {
 		for {
-			_, err := schedule.Take()
-			if err != nil {
-				log15.Warn("error taking from schedule", "schedule", t.schedule, "err", err)
+			if _, err := schedule.Take(); err == window.ErrZeroSchedule {
+				// With a zero schedule, we never want to send anything over C.
+				// We'll wait for the taker to be stopped, and then close C.
+				<-t.done
+				close(t.C)
 				return
-			}
-
-			t.mu.Lock()
-			// We want to check this _after_ the Take call potentially blocks so
-			// that we don't send down a channel that's no longer listening.
-			if t.done {
-				t.mu.Unlock()
+			} else if err != nil {
+				log15.Warn("error taking from schedule", "schedule", t.schedule, "err", err)
+				close(t.C)
+				// Ensure we drain done so that there isn't a panic if and when
+				// stop() is called.
+				go func() { <-t.done }()
 				return
 			}
 
 			delayC := make(chan time.Duration)
-			t.C <- delayC
-			t.mu.Unlock()
-
-			if delay := <-delayC; delay > 0 {
-				time.Sleep(delay)
+			select {
+			case t.C <- delayC:
+				if delay := <-delayC; delay > 0 {
+					time.Sleep(delay)
+				}
+			case <-t.done:
+				close(t.C)
+				return
 			}
 		}
 	})
@@ -64,8 +76,6 @@ func newTaker(schedule *window.Schedule) *taker {
 }
 
 func (t *taker) stop() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.done = true
+	t.done <- struct{}{}
+	close(t.done)
 }
