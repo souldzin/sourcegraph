@@ -25,6 +25,7 @@ type ChangesetState string
 // ChangesetState constants.
 const (
 	ChangesetStateUnpublished ChangesetState = "UNPUBLISHED"
+	ChangesetStateScheduled   ChangesetState = "SCHEDULED"
 	ChangesetStateProcessing  ChangesetState = "PROCESSING"
 	ChangesetStateOpen        ChangesetState = "OPEN"
 	ChangesetStateDraft       ChangesetState = "DRAFT"
@@ -39,6 +40,7 @@ const (
 func (s ChangesetState) Valid() bool {
 	switch s {
 	case ChangesetStateUnpublished,
+		ChangesetStateScheduled,
 		ChangesetStateProcessing,
 		ChangesetStateOpen,
 		ChangesetStateDraft,

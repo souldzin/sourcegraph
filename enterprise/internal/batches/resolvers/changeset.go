@@ -304,15 +304,19 @@ func (r *changesetResolver) State() (batches.ChangesetState, error) {
 	// Note that there's an inverse version of this function in
 	// getRewirerMappingCurrentState(): if one changes, so should the other.
 
-	if r.changeset.ReconcilerState == batches.ReconcilerStateErrored {
+	switch r.changeset.ReconcilerState {
+	case batches.ReconcilerStateErrored:
 		return batches.ChangesetStateRetrying, nil
-	}
-	if r.changeset.ReconcilerState == batches.ReconcilerStateFailed {
+	case batches.ReconcilerStateFailed:
 		return batches.ChangesetStateFailed, nil
+	case batches.ReconcilerStateScheduled:
+		return batches.ChangesetStateScheduled, nil
+	default:
+		if r.changeset.ReconcilerState != batches.ReconcilerStateCompleted {
+			return batches.ChangesetStateProcessing, nil
+		}
 	}
-	if r.changeset.ReconcilerState != batches.ReconcilerStateCompleted {
-		return batches.ChangesetStateProcessing, nil
-	}
+
 	if r.changeset.PublicationState == batches.ChangesetPublicationStateUnpublished {
 		return batches.ChangesetStateUnpublished, nil
 	}
