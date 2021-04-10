@@ -33,8 +33,6 @@ func NewScheduler(ctx context.Context, bstore *store.Store) *Scheduler {
 
 func (s *Scheduler) Start() {
 	goroutine.Go(func() {
-		log15.Debug("starting batch change scheduler")
-
 		// Set up a global backoff strategy where we start at 5 seconds, up to a
 		// minute, when we don't have any changesets to enqueue. Without this,
 		// an unlimited schedule will essentially busy-wait calling Take().
