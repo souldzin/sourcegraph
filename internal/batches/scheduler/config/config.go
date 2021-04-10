@@ -31,6 +31,15 @@ func Subscribe() chan *window.Configuration {
 	return ensureConfig().Subscribe()
 }
 
+// Reset destroys the existing singleton and forces it to be reinitialised the
+// next time Active() is called. This should never be used in non-testing code.
+func Reset() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	config = nil
+}
+
 // ensureConfig grabs the current configuration, lazily constructing it if
 // necessary. It momentarily locks the singleton mutex, but releases it when it
 // returns the config. This protects us against race conditions when overwriting
