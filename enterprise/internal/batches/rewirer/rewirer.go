@@ -5,7 +5,6 @@ import (
 
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/store"
 	"github.com/sourcegraph/sourcegraph/internal/batches"
-	"github.com/sourcegraph/sourcegraph/internal/batches/scheduler/config"
 	"github.com/sourcegraph/sourcegraph/internal/database"
 	"github.com/sourcegraph/sourcegraph/internal/types"
 )
@@ -89,13 +88,6 @@ func (r *ChangesetRewirer) Rewire() (changesets []*batches.Changeset, err error)
 }
 
 func (r *ChangesetRewirer) createChangesetForSpec(repo *types.Repo, spec *batches.ChangesetSpec) *batches.Changeset {
-	// Check if the scheduler is active, and if so, schedule rather than queue
-	// the changeset.
-	reconcilerState := batches.ReconcilerStateQueued
-	if config.Active().HasRolloutWindows() {
-		reconcilerState = batches.ReconcilerStateScheduled
-	}
-
 	newChangeset := &batches.Changeset{
 		RepoID:              spec.RepoID,
 		ExternalServiceType: repo.ExternalRepo.ServiceType,
@@ -105,12 +97,14 @@ func (r *ChangesetRewirer) createChangesetForSpec(repo *types.Repo, spec *batche
 		CurrentSpecID:        spec.ID,
 
 		PublicationState: batches.ChangesetPublicationStateUnpublished,
-		ReconcilerState:  reconcilerState,
 	}
 
 	// Copy over diff stat from the spec.
 	diffStat := spec.DiffStat()
 	newChangeset.SetDiffStat(&diffStat)
+
+	// Set up the initial queue state of the changeset.
+	newChangeset.ResetQueued()
 
 	return newChangeset
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/sourcegraph/go-diff/diff"
 
 	"github.com/sourcegraph/sourcegraph/internal/api"
+	"github.com/sourcegraph/sourcegraph/internal/batches/scheduler/config"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc/bitbucketserver"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc/github"
@@ -741,9 +742,15 @@ func (c *Changeset) Labels() []ChangesetLabel {
 	}
 }
 
-// ResetQueued resets the failure message and reset count and sets the changesets ReconcilerState to queued.
+// ResetQueued resets the failure message and reset count and sets the
+// changeset's ReconcilerState to queued or scheduled, depending on the site
+// configuration.
 func (c *Changeset) ResetQueued() {
-	c.ReconcilerState = ReconcilerStateQueued
+	if c.CurrentSpecID != 0 && config.Active().HasRolloutWindows() {
+		c.ReconcilerState = ReconcilerStateScheduled
+	} else {
+		c.ReconcilerState = ReconcilerStateQueued
+	}
 	c.NumResets = 0
 	c.NumFailures = 0
 	c.FailureMessage = nil
