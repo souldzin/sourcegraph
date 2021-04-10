@@ -6,9 +6,9 @@ import (
 
 	"github.com/inconshreveable/log15"
 
-	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/scheduler/config"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/batches/store"
 	"github.com/sourcegraph/sourcegraph/internal/batches"
+	"github.com/sourcegraph/sourcegraph/internal/batches/scheduler/config"
 	"github.com/sourcegraph/sourcegraph/internal/goroutine"
 )
 
