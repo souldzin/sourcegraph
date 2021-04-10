@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -710,7 +711,7 @@ func testStoreChangesetSpecsCurrentState(t *testing.T, ctx context.Context, s *S
 		states = map[batches.ChangesetState]*ct.TestChangesetOpts{
 			batches.ChangesetStateRetrying:    {ReconcilerState: batches.ReconcilerStateErrored},
 			batches.ChangesetStateFailed:      {ReconcilerState: batches.ReconcilerStateFailed},
-			batches.ChangesetStateProcessing:  {ReconcilerState: batches.ReconcilerStateCompleted},
+			batches.ChangesetStateScheduled:   {ReconcilerState: batches.ReconcilerStateScheduled},
 			batches.ChangesetStateUnpublished: {PublicationState: batches.ChangesetPublicationStateUnpublished},
 			batches.ChangesetStateDraft:       {ExternalState: batches.ChangesetExternalStateDraft},
 			batches.ChangesetStateOpen:        {ExternalState: batches.ChangesetExternalStateOpen},
@@ -769,6 +770,42 @@ func testStoreChangesetSpecsCurrentState(t *testing.T, ctx context.Context, s *S
 			}
 		})
 	}
+
+	// Finally, PROCESSING is special, and should match everything that isn't
+	// retrying, failed, scheduled, or completed.
+	t.Run(string(batches.ChangesetStateProcessing), func(t *testing.T) {
+		want := []int64{}
+		for state, changeset := range changesets {
+			switch state {
+			case batches.ChangesetStateRetrying:
+			case batches.ChangesetStateFailed:
+			case batches.ChangesetStateScheduled:
+			default:
+				want = append(want, changeset.ID)
+			}
+		}
+
+		state := batches.ChangesetStateProcessing
+		mappings, err := s.GetRewirerMappings(ctx, GetRewirerMappingsOpts{
+			BatchSpecID:   newBatchSpec.ID,
+			BatchChangeID: batchChange.ID,
+			CurrentState:  &state,
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %+v", err)
+		}
+
+		have := []int64{}
+		for _, mapping := range mappings {
+			have = append(have, mapping.ChangesetID)
+		}
+
+		sort.Slice(have, func(i, j int) bool { return have[i] < have[j] })
+		sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+		if diff := cmp.Diff(have, want); diff != "" {
+			t.Errorf("unexpected changesets (-have +want):\n%s", diff)
+		}
+	})
 }
 
 func testStoreChangesetSpecsCurrentStateAndTextSearch(t *testing.T, ctx context.Context, s *Store, clock ct.Clock) {
