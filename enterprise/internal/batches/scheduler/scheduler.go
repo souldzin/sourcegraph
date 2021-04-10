@@ -57,31 +57,17 @@ func (s *Scheduler) Start() {
 					// We can enqueue a changeset. Let's try to do so, ensuring
 					// that we always return a duration back down the delay
 					// channel.
-					func() {
-						d := time.Duration(0)
-						defer func() { delay <- d }()
-
-						if cs, err := s.store.GetNextScheduledChangeset(s.ctx); err == store.ErrNoResults {
-							// There is no changeset to enqueue, so we'll increment
-							// the backoff delay and return that.
-							d = backoff.next()
-						} else if err != nil {
-							// To state the obvious, this shouldn't happen. It's
-							// probably a database issue, so again, let's back
-							// off.
-							log15.Warn("error retrieving the next scheduled changeset", "err", err)
-							d = backoff.next()
-						} else {
-							// We have a changeset to enqueue, so let's move it into
-							// the right state, reset any backoff we might have
-							// accrued along the way, and loop without any delay.
-							cs.ReconcilerState = batches.ReconcilerStateQueued
-							if err := s.store.UpsertChangeset(s.ctx, cs); err != nil {
-								log15.Warn("error updating the next scheduled changeset", "err", err, "changeset", cs)
-							}
-							backoff.reset()
-						}
-					}()
+					if err := s.enqueueChangeset(); err != nil {
+						// If we get an error back, we need to increment the
+						// backoff delay and return that. enqueueChangeset will
+						// have handled any logging we need to do.
+						delay <- backoff.next()
+					} else {
+						// All is well, so we should reset the backoff delay
+						// and loop immediately.
+						backoff.reset()
+						delay <- time.Duration(0)
+					}
 
 				case <-validity.C:
 					// The schedule is no longer valid, so let's break out of
@@ -111,6 +97,26 @@ func (s *Scheduler) Start() {
 func (s *Scheduler) Stop() {
 	s.done <- struct{}{}
 	close(s.done)
+}
+
+func (s *Scheduler) enqueueChangeset() error {
+	cs, err := s.store.GetNextScheduledChangeset(s.ctx)
+	if err != nil {
+		// Let's see if this is an error caused by there being no changesets to
+		// enqueue (which is fine), or something less expected, in which case
+		// we should log the error.
+		if err != store.ErrNoResults {
+			log15.Warn("error retrieving the next scheduled changeset", "err", err)
+		}
+		return err
+	}
+
+	// We have a changeset to enqueue, so let's move it into the right state.
+	cs.ReconcilerState = batches.ReconcilerStateQueued
+	if err := s.store.UpsertChangeset(s.ctx, cs); err != nil {
+		log15.Warn("error updating the next scheduled changeset", "err", err, "changeset", cs)
+	}
+	return nil
 }
 
 // backoff implements a very simple bounded exponential backoff strategy.
